@@ -744,8 +744,7 @@ async function loadData(){
       buildChips();render();
       document.getElementById('loadBg').classList.remove('show');
     }catch(e2){
-      console.error('Erro fallback loadData:', e2);
-      document.getElementById('loadText').textContent='ERRO DE CONEXÃO — RECARREGUE A PÁGINA';
+      document.getElementById('loadText').innerHTML='ERRO DE CONEXÃO<br><span style="font-size:11px;color:#f9a825;font-family:monospace;white-space:pre-wrap;max-width:80vw;display:block;margin-top:12px">'+String(e2).replace(/</g,'&lt;')+'</span><br><span style="font-size:10px;color:#aaa">Causa anterior: '+String(e).replace(/</g,'&lt;')+'</span>';
     }
   }
 }
