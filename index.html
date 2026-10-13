@@ -723,28 +723,39 @@ function normalizeLoc(r){
            locador:+r.locador||0,std:+r.std||0,bb:+r.bb||0,strat:+r.strat||0};
 }
 
-async function loadData(){
-  document.getElementById('loadBg').classList.add('show');
+async function wakeSupabase(){
+  // Ping leve para acordar o projeto se estiver pausado
   try{
-    const [r1,r2,r3]=await Promise.all([sbGet('tabela_precos_outras'),sbGet('tabela_precos_es'),sbGet('tabela_precos_locadores')]);
-    DATASETS.outras=r1.map(normalize);
-    DATASETS.es=r2.map(normalize);
-    DATASETS.loc=r3.map(normalizeLoc);
-    rebuildMeta('outras');rebuildMeta('es');rebuildMeta('loc');
-    buildChips();render();
-    document.getElementById('loadBg').classList.remove('show');
-  }catch(e){
-    console.error('Erro loadData:', e);
+    await fetch(`${SB_URL}/rest/v1/`,{headers:{'apikey':SB_KEY},signal:AbortSignal.timeout(4000)});
+  }catch(_){}
+}
+
+async function loadData(){
+  const loadText=document.getElementById('loadText');
+  document.getElementById('loadBg').classList.add('show');
+  loadText.textContent='Conectando...';
+  // Tenta carregar direto; se falhar, acorda e tenta de novo
+  for(let tentativa=1;tentativa<=3;tentativa++){
     try{
-      const [r1,r2]=await Promise.all([sbGet('tabela_precos_outras'),sbGet('tabela_precos_es')]);
+      if(tentativa>1){
+        loadText.textContent='Acordando banco de dados'+(tentativa===2?'...':'... aguarde');
+        await wakeSupabase();
+        await new Promise(r=>setTimeout(r,3000));
+        loadText.textContent='Carregando preços...';
+      }
+      const [r1,r2,r3]=await Promise.all([sbGet('tabela_precos_outras'),sbGet('tabela_precos_es'),sbGet('tabela_precos_locadores')]);
       DATASETS.outras=r1.map(normalize);
       DATASETS.es=r2.map(normalize);
-      DATASETS.loc=[];
+      DATASETS.loc=r3.map(normalizeLoc);
       rebuildMeta('outras');rebuildMeta('es');rebuildMeta('loc');
       buildChips();render();
       document.getElementById('loadBg').classList.remove('show');
-    }catch(e2){
-      document.getElementById('loadText').innerHTML='ERRO DE CONEXÃO<br><span style="font-size:11px;color:#f9a825;font-family:monospace;white-space:pre-wrap;max-width:80vw;display:block;margin-top:12px">'+String(e2).replace(/</g,'&lt;')+'</span><br><span style="font-size:10px;color:#aaa">Causa anterior: '+String(e).replace(/</g,'&lt;')+'</span>';
+      return;
+    }catch(e){
+      console.error(`Tentativa ${tentativa} falhou:`,e);
+      if(tentativa===3){
+        loadText.innerHTML='ERRO DE CONEXÃO — RECARREGUE A PÁGINA<br><span style="font-size:11px;color:#f9a825;font-family:monospace;margin-top:8px;display:block">'+String(e).replace(/</g,'&lt;')+'</span>';
+      }
     }
   }
 }
