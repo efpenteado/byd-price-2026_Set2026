@@ -272,6 +272,8 @@ thead tr.head-main th.grp-strat{color:var(--purple);}
 thead tr.head-main th.grp-difal{color:var(--red);}
 
 .col-strat{display:none;}
+.grp-loc-head{color:var(--orange,#FF6B35);}
+.grp-loc-extra{color:var(--purple);}
 .col-difal{display:none;}
 .col-strat-difal{display:none;}
 .strat-on .col-strat{display:table-cell;}
@@ -625,7 +627,7 @@ mark{background:var(--amber);color:#0E1014;border-radius:2px;padding:0 2px;font-
     <div class="table-wrap">
       <table id="mainTable">
         <thead>
-          <tr class="head-main">
+          <tr class="head-main" id="mainTableHead">
             <th class="al-center">#</th>
             <th class="al-left">Cód.</th>
             <th class="al-left">Descrição</th>
@@ -633,9 +635,10 @@ mark{background:var(--amber);color:#0E1014;border-radius:2px;padding:0 2px;font-
             <th class="al-center">Carga</th>
             <th class="al-center">Bateria</th>
             <th class="al-center">Torre</th>
-            <th class="grp-std">Standard</th>
-            <th class="grp-bb">Big Business</th>
-            <th class="grp-strat col-strat">Strategic</th>
+            <th class="grp-loc-head" id="th-col1">Standard</th>
+            <th class="grp-bb" id="th-col2">Big Business</th>
+            <th class="grp-strat col-strat" id="th-col3">Strategic</th>
+            <th class="grp-loc-extra" id="th-col4" style="display:none">Strategic / Repr.</th>
             <th class="grp-difal col-difal">Std. DIFAL</th>
             <th class="grp-difal col-difal">BB DIFAL</th>
             <th class="grp-difal col-strat-difal">Strat. DIFAL</th>
@@ -665,7 +668,10 @@ const MAX_TON=25.0;
 const sbHeaders={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json'};
 async function sbGet(table){
   const r=await fetch(`${SB_URL}/rest/v1/${table}?order=code&limit=1000`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Range-Unit':'items','Range':'0-999'}});
-  return r.json();
+  if(!r.ok){const err=await r.json().catch(()=>({}));throw new Error(`Supabase ${table}: HTTP ${r.status} — ${err.message||err.hint||JSON.stringify(err)}`);}
+  const data=await r.json();
+  if(!Array.isArray(data)){throw new Error(`Supabase ${table}: resposta inesperada — ${JSON.stringify(data).slice(0,200)}`);}
+  return data;
 }
 async function sbPatch(table,row){
   await fetch(`${SB_URL}/rest/v1/${table}?code=eq.${row.code}`,{method:'PATCH',headers:sbHeaders,body:JSON.stringify(row)});
@@ -738,6 +744,7 @@ async function loadData(){
       buildChips();render();
       document.getElementById('loadBg').classList.remove('show');
     }catch(e2){
+      console.error('Erro fallback loadData:', e2);
       document.getElementById('loadText').textContent='ERRO DE CONEXÃO — RECARREGUE A PÁGINA';
     }
   }
@@ -824,7 +831,27 @@ function filteredData(){
   });
 }
 
+function updateHeaders(){
+  const isLoc=curTab==='loc';
+  const h1=document.getElementById('th-col1');
+  const h2=document.getElementById('th-col2');
+  const h3=document.getElementById('th-col3');
+  const h4=document.getElementById('th-col4');
+  if(!h1)return;
+  if(isLoc){
+    h1.textContent='LOCADOR';h1.className='grp-loc-head';
+    h2.textContent='STANDARD / REPR.';h2.className='grp-std';
+    h3.textContent='BIG BUSINESS / REPR.';h3.className='grp-bb';
+    h4.style.display='table-cell';
+  }else{
+    h1.textContent='STANDARD';h1.className='grp-std';
+    h2.textContent='BIG BUSINESS';h2.className='grp-bb';
+    h3.textContent='STRATEGIC';h3.className='grp-strat col-strat';
+    h4.style.display='none';
+  }
+}
 function render(){
+  updateHeaders();
   const items=filteredData();const q=S.txt;const f=getDifalFator();
   document.getElementById('countN').textContent=items.length;
   document.getElementById('hdrN').textContent=String((DATASETS[curTab]||[]).length).padStart(3,'0');
@@ -839,12 +866,20 @@ function render(){
       <td><div class="ton-cell"><div class="ton-track"><div class="ton-fill" style="width:${tonPct}%"></div></div><span class="ton-num">${d.ton?d.ton.toFixed(1)+'T':'\u2014'}</span></div></td>
       <td class="td-spec">${d.battery||'\u2014'}</td>
       <td class="td-spec">${d.height||'\u2014'}</td>
-      ${curTab==='loc'?`<td class="td-num" style="color:var(--orange,#FF6B35)">${fmt(d.locador||0)}</td>`:''}
-      <td class="td-num std">${fmt(d.std)}</td>
-      <td class="td-num bb">${fmt(d.bb)}</td>
-      <td class="td-num strat col-strat">${fmt(d.strat)}</td>
-      ${curTab!=='loc'?`<td class="td-num difal col-difal">${fmt(Math.round(d.std*f*100)/100)}</td><td class="td-num difal col-difal">${fmt(Math.round(d.bb*f*100)/100)}</td>`:''}
-      ${curTab!=='loc'?`<td class="td-num difal col-strat-difal">${fmt(Math.round(d.strat*f*100)/100)}</td>`:''}
+      ${curTab==='loc'
+        ?`<td class="td-num" style="color:var(--orange,#FF6B35)">${fmt(d.locador||0)}</td>
+          <td class="td-num std">${fmt(d.std)}</td>
+          <td class="td-num bb">${fmt(d.bb)}</td>
+          <td class="td-num strat col-strat">${fmt(d.strat)}</td>
+          <td class="td-num" style="color:var(--purple);display:table-cell">${fmt(d.strat)}</td>`
+        :`<td class="td-num std">${fmt(d.std)}</td>
+          <td class="td-num bb">${fmt(d.bb)}</td>
+          <td class="td-num strat col-strat">${fmt(d.strat)}</td>
+          <td style="display:none"></td>
+          <td class="td-num difal col-difal">${fmt(Math.round(d.std*f*100)/100)}</td>
+          <td class="td-num difal col-difal">${fmt(Math.round(d.bb*f*100)/100)}</td>
+          <td class="td-num difal col-strat-difal">${fmt(Math.round(d.strat*f*100)/100)}</td>`
+      }
     </tr>`;
   }).join('');
 }
